@@ -8,7 +8,7 @@ export interface Message {
 }
 
 export class WebSocketClient extends EventEmitter {
-    private socket: WebSocket;
+    private socket: WebSocket | null = null;
     private url: string;
     private reconnectionManager: ReconnectionManager;
     private middlewareManager: MiddlewareManager;
@@ -34,20 +34,20 @@ export class WebSocketClient extends EventEmitter {
             this.emit("connected");
             this.reconnectionManager.resetAttempts();
         };
-        
+
         this.socket.onmessage = (event: MessageEvent) => {
             const message: Message = JSON.parse(event.data);
             this.emit(message.event, message.data);
             this.middlewareManager.run(message.data);
         };
-        
+
         this.socket.onclose = () => {
             console.log("WebSocket connection closed, attempting to reconnect");
             // call on:disconnected handler on client
             this.emit("disconnected");
             this.reconnectionManager.attemptReconnection();
         };
-        
+
         this.socket.onerror = (error: Event) => {
             console.error("WebSocket Error:", error);
         };
@@ -59,11 +59,11 @@ export class WebSocketClient extends EventEmitter {
     }
 
     send(event: string, data?: any) {
-        if (this.socket.readyState === WebSocket.OPEN) {
+        if (this.socket?.readyState === WebSocket.OPEN) {
             const message: Message = { event, data };
             this.socket.send(JSON.stringify(message));
         } else {
-            console.error("WebSocket is not open. Ready state: ", this.socket.readyState);
+            console.error("WebSocket is not open. Ready state: ", this.socket?.readyState);
         }
     }
 }

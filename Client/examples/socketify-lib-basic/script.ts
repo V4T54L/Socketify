@@ -1,28 +1,16 @@
 import { WebSocketClient } from "../../socketify-lib/src/WebsocketClient";
 
-function sendPingEvery5Seconds(): number {
-    const intervalId = setInterval(() => {
-        if (client && clientConnected) {
-            try {
-                console.log('Sending ping message...');
-                client.send('ping', {});
-            } catch (error) {
-                console.error('Error sending ping message:', error);
-                clearInterval(intervalId); // Clear interval to prevent multiple reconnects on error
-            }
-        } else {
-            clearInterval(intervalId);
-        }
-    }, 5000); // Every 5 seconds (5000 milliseconds)
-
-    return intervalId; // Return the intervalId to allow for manual clear or stop
-}
-
+// Constants
 const SERVER_URL = 'ws://localhost:8080';
-let clientConnected: Boolean = false
+const PING_INTERVAL_MS = 5000;
+const MESSAGE_TYPE_BROADCAST = 'broadcast';
+const MESSAGE_TYPE_PING = 'ping';
+
+// State
+let clientConnected: boolean = false;
 
 // Define middleware functions
-const loggingMiddleware = (data: any, next: () => void) => {
+const loggingMiddleware = (data: Record<string, any>, next: () => void) => {
     console.log('Middleware: Sending data:', data);
     next();
 };
@@ -32,51 +20,64 @@ const errorMiddleware = (error: Error, next: () => void) => {
     next();
 };
 
-interface BroadcastMessage {
-    text: string;
-}
-
 // Initialize WebSocket client
 const client = new WebSocketClient(SERVER_URL, {
     maxReconnectAttempts: 5,
     reconnectDelay: 1000
 });
 
-// use it to clear interval
-let pingIntervalId = sendPingEvery5Seconds();
+// Start sending ping messages
+const sendPingEvery5Seconds = () => {
+    const intervalId = setInterval(() => {
+        if (clientConnected) {
+            try {
+                console.log('Sending ping message...');
+                client.send(MESSAGE_TYPE_PING, {});
+            } catch (error) {
+                console.error('Error sending ping message:', error);
+                clearInterval(intervalId);
+            }
+        } else {
+            clearInterval(intervalId);
+        }
+    }, PING_INTERVAL_MS);
+};
 
 // Add middleware
 client.use(loggingMiddleware);
 client.use(errorMiddleware);
 
+// Handle WebSocket events
 client.on('disconnected', () => {
-    clientConnected = false
+    clientConnected = false;
     console.log('Disconnected from WebSocket server');
 });
 
-function handleIncomingMessage(data: BroadcastMessage) {
-    console.log("Message from the server : ", data.text);
-
-    // Display message in chat area
-    const chatArea = document.getElementById('chatArea') as HTMLDivElement;
-    const messageElement = document.createElement('p');
-    messageElement.textContent = data.text;
-    chatArea.appendChild(messageElement);
-}
-
 client.on('connected', () => {
-    clientConnected = true
-    // Send a greeting after connecting
+    clientConnected = true;
+    sendPingEvery5Seconds();
     sendMessage('Hello, everyone!');
 });
 
-client.on("broadcastResponse", handleIncomingMessage);
+client.on("broadcastResponse", (data: { text: string }) => {
+    console.log("Message from the server : ", data.text);
+    const chatArea = document.getElementById('chatArea') as HTMLDivElement;
+    if (chatArea) {
+        const messageElement = document.createElement('p');
+        messageElement.textContent = data.text;
+        chatArea.appendChild(messageElement);
+    }
+});
+
 client.on("pong", () => console.log("Pong received"));
 
 function sendMessage(message: string) {
-    console.log('Connected to WebSocket server');
+    if (!clientConnected) {
+        console.error('Cannot send message, not connected.');
+        return;
+    }
     try {
-        client.send('broadcast', { text: message });
+        client.send(MESSAGE_TYPE_BROADCAST, { text: message });
     } catch (error) {
         console.error('Error sending message:', error);
     }
@@ -85,10 +86,15 @@ function sendMessage(message: string) {
 // Handle user input
 document.querySelector('#sendButton')?.addEventListener('click', () => {
     const messageInput = document.querySelector<HTMLInputElement>('#messageInput');
-    const message = messageInput?.value;
+    if (!messageInput) {
+        return
+    }
+    const message = messageInput?.value.trim(); // Trim whitespace
 
     if (message) {
         sendMessage(message);
         messageInput.value = ''; // Clear input field
+    } else {
+        console.warn('Empty message cannot be sent.');
     }
 });
