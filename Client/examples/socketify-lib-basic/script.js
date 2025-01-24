@@ -1,22 +1,21 @@
 import { WebSocketClient } from "../../socketify-lib/dist/index.mjs";
 
-
 // Constants
-const SERVER_URL = 'ws://localhost:8080';
+const SERVER_URL = 'ws://localhost:8080/ws';
 const PING_INTERVAL_MS = 5000;
 const MESSAGE_TYPE_BROADCAST = 'broadcast';
 const MESSAGE_TYPE_PING = 'ping';
 
 // State
-let clientConnected: boolean = false;
+let clientConnected = false;
 
 // Define middleware functions
-const loggingMiddleware = (data: Record<string, any>, next: () => void) => {
+const loggingMiddleware = (data, next) => {
     console.log('Middleware: Sending data:', data);
     next();
 };
 
-const errorMiddleware = (error: Error, next: () => void) => {
+const errorMiddleware = (error, next) => {
     console.error('Middleware: Error occurred:', error);
     next();
 };
@@ -60,9 +59,9 @@ client.on('connected', () => {
     sendMessage('Hello, everyone!');
 });
 
-client.on("broadcastResponse", (data: { text: string }) => {
+client.on("broadcastResponse", (data) => {
     console.log("Message from the server : ", data.text);
-    const chatArea = document.getElementById('chatArea') as HTMLDivElement;
+    const chatArea = document.getElementById('chatArea');
     if (chatArea) {
         const messageElement = document.createElement('p');
         messageElement.textContent = data.text;
@@ -72,7 +71,7 @@ client.on("broadcastResponse", (data: { text: string }) => {
 
 client.on("pong", () => console.log("Pong received"));
 
-function sendMessage(message: string) {
+function sendMessage(message) {
     if (!clientConnected) {
         console.error('Cannot send message, not connected.');
         return;
@@ -86,11 +85,11 @@ function sendMessage(message: string) {
 
 // Handle user input
 document.querySelector('#sendButton')?.addEventListener('click', () => {
-    const messageInput = document.querySelector<HTMLInputElement>('#messageInput');
+    const messageInput = document.querySelector('#messageInput');
     if (!messageInput) {
-        return
+        return;
     }
-    const message = messageInput?.value.trim(); // Trim whitespace
+    const message = messageInput.value.trim(); // Trim whitespace
 
     if (message) {
         sendMessage(message);
